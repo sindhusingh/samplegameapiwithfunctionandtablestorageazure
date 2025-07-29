@@ -53,7 +53,7 @@ curl -X POST http://localhost:7071/api/createPlayer \
   -H "Content-Type: application/json" \
   -H "x-session-ticket: test_session_ticket_123" \
   -d '{
-    "playFabId": "player_123456",
+    "playFabId": "player_XX",
     "name": "Sindhu",
     "level": 5,
     "email": "sindhu@example.com"
@@ -63,9 +63,19 @@ curl -X POST http://localhost:7071/api/createPlayer \
 ### 6. Get Player
 
 ```bash
-curl -X GET "http://localhost:7071/api/players/player_123456" \
-  -H "x-session-ticket: test_session_ticket_123"
+curl -X GET "http://localhost:7071/api/players/player_123456" \ 
+  -H "x-session-ticket: test_session_ticket_123" \
+  -H "Accept: application/json"
 ```
+
+
+
+curl -X POST http://localhost:7071/api/players \
+  -H "Content-Type: application/json" \
+  -H "x-session-ticket: test_session_ticket_123" \
+  -d '{"playFabId":"player1","name":"Sindhu First"}'
+
+
 
 ### 7. Update Player
 

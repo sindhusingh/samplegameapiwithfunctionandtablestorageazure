@@ -35,8 +35,9 @@ export async function createPlayerHandler(
         // 4. Return Success
         return createResponse(true, 201, {
             data: {
-                id: player.partitionKey,
+                playFabId: player.partitionKey,
                 name: player.name,
+                email: player.email,
                 level: player.level,
                 createdAt: player.createdAt,
             },
@@ -58,7 +59,17 @@ export async function createPlayerHandler(
 
 app.http("createPlayer", {
     methods: ["POST"],
-    route: "players",
+    route: "createPlayer",
     authLevel: "anonymous",
     handler: createPlayerHandler,
 });
+
+// curl -X POST http://localhost:7071/api/createPlayer \
+//   -H "Content-Type: application/json" \
+//   -H "x-session-ticket: test_session_ticket_123" \
+//   -d '{
+//     "playFabId": "player_XX",
+//     "name": "Sindhu",
+//     "level": 5,
+//     "email": "sindhu@example.com"
+//   }'

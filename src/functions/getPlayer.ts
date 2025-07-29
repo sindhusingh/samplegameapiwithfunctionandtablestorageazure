@@ -26,7 +26,7 @@ export async function getPlayerHandler(
 
         return createResponse(true, 200, {
             data: {
-                id: player.partitionKey,
+                playFabId: player.partitionKey,
                 name: player.name,
                 level: player.level,
                 email: player.email,
@@ -44,3 +44,7 @@ app.http("getPlayer", {
     authLevel: "anonymous",
     handler: getPlayerHandler,
 });
+
+// curl -X GET "http://localhost:7071/api/players/player_XX" \
+//   -H "x-session-ticket: test_session_ticket_123" \
+//   -H "Accept: application/json"

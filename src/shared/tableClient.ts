@@ -1,5 +1,9 @@
 import { TableClient } from "@azure/data-tables";
-import { PlayerEntity, UpdatePlayerDto } from "../interfaces/player";
+import {
+    CreatePlayerDto,
+    PlayerEntity,
+    UpdatePlayerDto,
+} from "../interfaces/player";
 
 // Custom error classes
 export class PlayerAlreadyExistsError extends Error {
@@ -71,6 +75,10 @@ async function handleTableOperation<T>(
     try {
         return await operation();
     } catch (error) {
+        if (error instanceof PlayerAlreadyExistsError) {
+            throw error;
+        }
+
         if (error.statusCode === 404) {
             throw new PlayerNotFoundError(
                 error.details.odataError.message.replace(
@@ -94,23 +102,23 @@ async function handleTableOperation<T>(
     }
 }
 
-export async function createPlayer(playerData: {
-    playFabId: string;
-    name?: string;
-    level?: number;
-    email?: string;
-}): Promise<PlayerEntity> {
+export async function createPlayer(
+    playerData: CreatePlayerDto,
+): Promise<PlayerEntity> {
     return handleTableOperation(async () => {
         // 1. Check for existing player first (for idempotency)
         try {
-            const existing = await tableClient.getEntity(
+            const existingPlayer = await tableClient.getEntity<PlayerEntity>(
                 playerData.playFabId,
                 playerData.playFabId,
             );
-
-            throw new PlayerAlreadyExistsError(playerData.playFabId);
-        } catch (err) {
-            if (!(err instanceof PlayerNotFoundError)) throw err;
+            return existingPlayer; // Return if exists
+        } catch (err: any) {
+            // Only proceed if the error is a "not found" error
+            if (err.statusCode !== 404) {
+                throw err;
+            }
+            // Otherwise continue with creation
         }
 
         // 2. Create new entity

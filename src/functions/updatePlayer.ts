@@ -43,7 +43,7 @@ export async function updatePlayerHandler(
         // 4. Return Success
         return createResponse(true, 200, {
             data: {
-                id: updatedPlayer.partitionKey,
+                playFabId: updatedPlayer.partitionKey,
                 name: updatedPlayer.name,
                 level: updatedPlayer.level,
                 email: updatedPlayer.email,
