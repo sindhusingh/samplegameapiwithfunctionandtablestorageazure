@@ -1,10 +1,15 @@
-import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import {
+    app,
+    HttpRequest,
+    HttpResponseInit,
+    InvocationContext,
+} from "@azure/functions";
 import { TableClient } from "@azure/data-tables";
 
 // Initialize Table Client
 const tableClient = TableClient.fromConnectionString(
-    process.env.AzureWebJobsStorage, 
-    "Players"
+    process.env.AzureWebJobsStorage,
+    "Players",
 );
 
 // Type definitions
@@ -15,10 +20,13 @@ interface PlayerUpdateRequest {
     createdAt?: string;
 }
 
-export async function updatePlayer(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+export async function updatePlayer(
+    request: HttpRequest,
+    context: InvocationContext,
+): Promise<HttpResponseInit> {
     try {
         // 1. Validate session ticket
-        const sessionTicket = request.headers.get('x-session-ticket');
+        const sessionTicket = request.headers.get("x-session-ticket");
         if (!sessionTicket) {
             return { status: 401, body: "Missing PlayFab session ticket" };
         }
@@ -36,7 +44,11 @@ export async function updatePlayer(request: HttpRequest, context: InvocationCont
         }
 
         // 4. Get existing player
-        const existingPlayer: PlayerUpdateRequest = await tableClient.getEntity<PlayerUpdateRequest>(playFabId, playFabId);
+        const existingPlayer: PlayerUpdateRequest =
+            await tableClient.getEntity<PlayerUpdateRequest>(
+                playFabId,
+                playFabId,
+            );
 
         // 5. Merge changes
         const updatedPlayer = {
@@ -45,40 +57,39 @@ export async function updatePlayer(request: HttpRequest, context: InvocationCont
             ...existingPlayer,
             ...updateData,
             // Preserve original createdAt if exists
-            createdAt: existingPlayer.createdAt || new Date().toISOString()
+            createdAt: existingPlayer.createdAt || new Date().toISOString(),
         };
 
         // 6. Save updates
         await tableClient.updateEntity(updatedPlayer, "Merge");
 
-        return { 
+        return {
             status: 200,
             jsonBody: {
                 success: true,
-                player: updatedPlayer
-            }
+                player: updatedPlayer,
+            },
         };
-
     } catch (error) {
         context.error("Update failed:", error);
-        
+
         if (error.statusCode === 404) {
             return { status: 404, body: "Player not found" };
         }
 
-        return { 
+        return {
             status: 500,
             jsonBody: {
                 error: "Update failed",
-                details: error.message
-            }
+                details: error.message,
+            },
         };
     }
 }
 
-app.http('updatePlayer', {
-    route: 'players/{playFabId}',
-    methods: ['PATCH', 'PUT'],
-    authLevel: 'anonymous',
-    handler: updatePlayer
+app.http("updatePlayer", {
+    route: "players/{playFabId}",
+    methods: ["PATCH", "PUT"],
+    authLevel: "anonymous",
+    handler: updatePlayer,
 });
