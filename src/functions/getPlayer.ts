@@ -45,6 +45,6 @@ app.http("getPlayer", {
     handler: getPlayerHandler,
 });
 
-// curl -X GET "http://localhost:7071/api/players/player_XX" \
+// curl -X GET "http://localhost:7071/api/players/7991C9F19E7D3549" \
 //   -H "x-session-ticket: test_session_ticket_123" \
 //   -H "Accept: application/json"

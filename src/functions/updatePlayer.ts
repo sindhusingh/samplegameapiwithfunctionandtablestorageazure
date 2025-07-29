@@ -64,7 +64,7 @@ export async function updatePlayerHandler(
 }
 
 app.http("updatePlayer", {
-    methods: ["PATCH"],
+    methods: ["POST"],
     route: "players/{playFabId}",
     authLevel: "anonymous",
     handler: updatePlayerHandler,
