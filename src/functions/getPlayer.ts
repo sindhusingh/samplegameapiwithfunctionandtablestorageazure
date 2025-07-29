@@ -4,75 +4,78 @@ import {
     HttpResponseInit,
     InvocationContext,
 } from "@azure/functions";
-import { TableClient } from "@azure/data-tables";
+import {
+    getPlayer,
+    NotModifiedError,
+    PlayerNotFoundError,
+} from "../shared/tableClient";
+import { createResponse } from "../shared/responseHelper";
 
-// Define TypeScript interfaces
-interface PlayerRequest {
-    playFabId: string;
-    name?: string;
-    level?: number;
-    email?: string;
-}
-
-interface PlayerEntity {
-    partitionKey: string;
-    rowKey: string;
-    name: string;
-    level: number;
-    email: string;
-    createdAt: string;
-}
-
-// 1. Initialize table client OUTSIDE functions (shared instance)
-const tableClient = TableClient.fromConnectionString(
-    process.env.AzureWebJobsStorage, // "UseDevelopmentStorage=true" locally
-    "Players",
-);
-
-// 2. Table initialization (runs ONCE when Functions start)
-async function initializeTable() {
-    try {
-        await tableClient.createTable();
-        console.log("Players table ready");
-    } catch (err) {
-        if (err.details?.errorCode !== "TableAlreadyExists") {
-            throw err;
-        }
-    }
-}
-
-// 3. Call initialization BEFORE functions start
-initializeTable().catch(console.error);
-
-// 4. Your function handler (separate from initialization)
-export async function getPlayer(
+export async function getPlayerHandler(
     request: HttpRequest,
     context: InvocationContext,
 ): Promise<HttpResponseInit> {
-    const playFabId = request.params.playFabId;
+    try {
+        const playFabId = request.params.playFabId;
+        if (!playFabId) {
+            return { status: 400, body: "playFabId is required" };
+        }
 
-    // Get ALL players with this PlayFabID (PartitionKey)
-    const players = [];
-    for await (const entity of tableClient.listEntities({
-        queryOptions: { filter: `PartitionKey eq '${playFabId}'` },
-    })) {
-        players.push(entity);
+        // Check caching headers
+        const ifNoneMatch = request.headers.get("if-none-match");
+
+        const player = await getPlayer(playFabId, {
+            consistentRead: true, // Ensure latest data
+            ifNoneMatch,
+        });
+
+        if (!player) {
+            throw new PlayerNotFoundError(playFabId);
+        }
+
+        // Handle caching
+        if (player instanceof NotModifiedError) {
+            return { status: 304 };
+        }
+
+        return {
+            status: 200,
+            jsonBody: createResponse({
+                success: true,
+                data: { player },
+                metadata: { etag: player.etag },
+            }),
+            headers: {
+                ETag: player.etag,
+                "Cache-Control": "max-age=60",
+                "Last-Modified": new Date(player.createdAt).toUTCString(),
+            },
+        };
+    } catch (error) {
+        if (error instanceof PlayerNotFoundError) {
+            return { status: 404, jsonBody: { error: error.message } };
+        }
+
+        if (error instanceof NotModifiedError) {
+            return { status: 304 };
+        }
+
+        context.error(`Get failed: ${error}`, {
+            invocationId: context.invocationId,
+        });
+        return {
+            status: 500,
+            jsonBody: {
+                error: "Internal server error",
+                correlationId: context.invocationId,
+            },
+        };
     }
-
-    if (players.length === 0) {
-        return { status: 404, body: "Player not found" };
-    }
-
-    // Return the most recent player (assuming RowKey is timestamp-based)
-    const latestPlayer = players.sort((a, b) =>
-        b.rowKey.localeCompare(a.rowKey),
-    )[0];
-    return { jsonBody: latestPlayer };
 }
 
 app.http("getPlayer", {
-    route: "players/{playFabId}",
     methods: ["GET"],
+    route: "players/{playFabId}",
     authLevel: "anonymous",
-    handler: getPlayer,
+    handler: getPlayerHandler,
 });
