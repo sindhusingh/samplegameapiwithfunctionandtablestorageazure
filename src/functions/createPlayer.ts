@@ -13,49 +13,46 @@ export async function createPlayerHandler(
     context: InvocationContext,
 ): Promise<HttpResponseInit> {
     try {
-        // 1. Validate input
+        // 1. Validate Input
         const body = (await request.json()) as CreatePlayerDto;
         if (!body.playFabId) {
-            return { status: 400, body: "playFabId is required" };
+            return createResponse(false, 400, {
+                errorMessage: "playFabId is required",
+            });
         }
 
-        // 2. Create player
-        const player = await createPlayer(body.playFabId, {
-            name: body.name,
-            level: body.level,
-            email: body.email,
-        });
-
-        // 3. Return success
-        return {
-            status: 201,
-            jsonBody: createResponse({
-                success: true,
-                data: { id: player.partitionKey, name: player.name },
-                metadata: { etag: player.etag },
-            }),
-            headers: { Location: `/players/${player.partitionKey}` },
-        };
-    } catch (error) {
-        // 4. Handle specific errors
-        if (error instanceof PlayerAlreadyExistsError) {
-            return {
-                status: 409,
-                jsonBody: {
-                    error: "Player already exists",
-                    existingId: error.message.split(" ")[1],
-                },
-            };
+        // 2. Check for existing session (optional)
+        const sessionTicket = request.headers.get("x-session-ticket");
+        if (!sessionTicket) {
+            return createResponse(false, 401, {
+                errorMessage: "Missing PlayFab session ticket",
+            });
         }
 
-        context.error("Create failed:", error);
-        return {
-            status: 500,
-            jsonBody: {
-                error: "Internal server error",
-                correlationId: context.invocationId,
+        // 3. Create Player
+        const player = await createPlayer(body);
+
+        // 4. Return Success
+        return createResponse(true, 201, {
+            data: {
+                id: player.partitionKey,
+                name: player.name,
+                level: player.level,
+                createdAt: player.createdAt,
             },
-        };
+        });
+    } catch (error) {
+        context.error(`CreatePlayer failed: ${error}`);
+
+        // Handle specific errors
+        if (error instanceof PlayerAlreadyExistsError) {
+            return createResponse(false, 409, {
+                errorMessage: "Player already exists",
+            });
+        }
+
+        // Generic server error
+        return createResponse(false, 500);
     }
 }
 

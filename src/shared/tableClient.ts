@@ -94,28 +94,29 @@ async function handleTableOperation<T>(
     }
 }
 
-export async function createPlayer(
-    playFabId: string,
-    playerData: {
-        name?: string;
-        level?: number;
-        email?: string;
-    },
-): Promise<PlayerEntity> {
+export async function createPlayer(playerData: {
+    playFabId: string;
+    name?: string;
+    level?: number;
+    email?: string;
+}): Promise<PlayerEntity> {
     return handleTableOperation(async () => {
         // 1. Check for existing player first (for idempotency)
         try {
-            const existing = await tableClient.getEntity(playFabId, playFabId);
+            const existing = await tableClient.getEntity(
+                playerData.playFabId,
+                playerData.playFabId,
+            );
 
-            throw new PlayerAlreadyExistsError(playFabId);
+            throw new PlayerAlreadyExistsError(playerData.playFabId);
         } catch (err) {
             if (!(err instanceof PlayerNotFoundError)) throw err;
         }
 
         // 2. Create new entity
         const entity: PlayerEntity = {
-            partitionKey: playFabId,
-            rowKey: playFabId,
+            partitionKey: playerData.playFabId,
+            rowKey: playerData.playFabId,
             name: playerData.name || "Guest",
             level: playerData.level ?? 1,
             email: playerData.email ?? "",

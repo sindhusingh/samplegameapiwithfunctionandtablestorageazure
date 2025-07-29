@@ -1,52 +1,71 @@
 import {
+    app,
     HttpRequest,
     HttpResponseInit,
     InvocationContext,
 } from "@azure/functions";
-import { UpdatePlayerDto } from "../interfaces/player";
-import {
-    PlayerNotFoundError,
-    PlayerUpdateConflictError,
-    updatePlayer,
-} from "../shared/tableClient";
 import { createResponse } from "../shared/responseHelper";
+import { UpdatePlayerDto } from "../interfaces/player";
+import { PlayerNotFoundError, updatePlayer } from "../shared/tableClient";
 
-export async function updatePlayerEndpoint(
+export async function updatePlayerHandler(
     request: HttpRequest,
     context: InvocationContext,
 ): Promise<HttpResponseInit> {
     try {
+        // 1. Validate Input
         const playFabId = request.params.playFabId;
+        if (!playFabId) {
+            return createResponse(false, 400, {
+                errorMessage: "playFabId is required in URL",
+            });
+        }
+
         const updates = (await request.json()) as UpdatePlayerDto;
-        const etag = request.headers.get("if-match");
+        if (!updates.name && !updates.level && !updates.email) {
+            return createResponse(false, 400, {
+                errorMessage:
+                    "At least one field (name, level, or email) must be provided",
+            });
+        }
 
-        const updatedPlayer = await updatePlayer(
-            playFabId,
-            updates,
-            etag || undefined,
-        );
+        // 2. Verify Session (optional)
+        const sessionTicket = request.headers.get("x-session-ticket");
+        if (!sessionTicket) {
+            return createResponse(false, 401, {
+                errorMessage: "Missing PlayFab session ticket",
+            });
+        }
 
-        return {
-            status: 200,
-            jsonBody: createResponse({
-                success: true,
-                data: { level: updatedPlayer.level },
-                metadata: { etag: updatedPlayer.etag },
-            }),
-        };
+        // 3. Apply Updates
+        const updatedPlayer = await updatePlayer(playFabId, updates);
+
+        // 4. Return Success
+        return createResponse(true, 200, {
+            data: {
+                id: updatedPlayer.partitionKey,
+                name: updatedPlayer.name,
+                level: updatedPlayer.level,
+                email: updatedPlayer.email,
+                updatedAt: new Date().toISOString(),
+            },
+        });
     } catch (error) {
+        context.error(`UpdatePlayer failed: ${error}`);
+
         if (error instanceof PlayerNotFoundError) {
-            return { status: 404, body: error.message };
+            return createResponse(false, 404, {
+                errorMessage: "Player not found",
+            });
         }
 
-        if (error instanceof PlayerUpdateConflictError) {
-            return {
-                status: 409,
-                body: "Conflict detected - please refresh and retry",
-            };
-        }
-
-        context.error("Update failed:", error);
-        return { status: 500, body: "Internal server error" };
+        return createResponse(false, 500);
     }
 }
+
+app.http("updatePlayer", {
+    methods: ["PATCH"],
+    route: "players/{playFabId}",
+    authLevel: "anonymous",
+    handler: updatePlayerHandler,
+});
